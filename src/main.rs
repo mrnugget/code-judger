@@ -31,12 +31,12 @@ fn judge_code(code: &str, assertions: Vec<&str>) -> Result<Judgement> {
         .collect::<Vec<_>>()
         .join("\n");
 
-    let prompt = include_str!("../prompts/eval.md")
+    let prompt = include_str!("../prompts/judge.md")
         .replace("<code>", &fenced_code)
         .replace("<assertions>", &formatted_assertions);
 
     let api_key = std::env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY is not set");
-    let model = "claude-3-5-haiku-20241022";
+    let model = "claude-3-5-haiku-latest";
 
     let start = std::time::Instant::now();
 
