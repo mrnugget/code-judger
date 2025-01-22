@@ -14,10 +14,31 @@ struct ClaudeResponse {
     content: Vec<ContentItem>,
 }
 
-#[derive(Debug)]
 struct Judgement {
     score: f64,
     message: String,
+}
+
+fn get_claude_response(prompt: &str) -> Result<String> {
+    let api_key = std::env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY is not set");
+    let model = "claude-3-5-haiku-latest";
+
+    let mut response: ClaudeResponse = ureq::post("https://api.anthropic.com/v1/messages")
+        .set("x-api-key", &api_key)
+        .set("anthropic-version", "2023-06-01")
+        .set("content-type", "application/json")
+        .send_json(json!({
+            "model": model,
+            "temperature": 0.0,
+            "messages": [{
+                "role": "user",
+                "content": prompt
+            }],
+            "max_tokens": 1024
+        }))?
+        .into_json()?;
+
+    Ok(response.content.remove(0).text)
 }
 
 fn judge_code(code: &str, assertions: Vec<&str>) -> Result<Judgement> {
@@ -35,34 +56,9 @@ fn judge_code(code: &str, assertions: Vec<&str>) -> Result<Judgement> {
         .replace("<code>", &fenced_code)
         .replace("<assertions>", &formatted_assertions);
 
-    let api_key = std::env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY is not set");
-    let model = "claude-3-5-haiku-latest";
-
-    let start = std::time::Instant::now();
-
-    let response: ClaudeResponse = ureq::post("https://api.anthropic.com/v1/messages")
-        .set("x-api-key", &api_key)
-        .set("anthropic-version", "2023-06-01")
-        .set("content-type", "application/json")
-        .send_json(json!({
-            "model": model,
-            "temperature": 0.0,
-            "messages": [{
-                "role": "user",
-                "content": prompt
-            }],
-            "max_tokens": 1024
-        }))?
-        .into_json()?;
-
-    let duration = start.elapsed();
-    println!("Request took: {:?}", duration);
+    let response = get_claude_response(&prompt)?;
 
     let (message, score_text) = response
-        .content
-        .first()
-        .expect("content contains no message")
-        .text
         .rsplit_once('\n')
         .ok_or(anyhow::anyhow!("Failed to parse score"))?;
     let score = score_text.parse::<f64>()?;
