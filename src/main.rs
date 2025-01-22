@@ -58,7 +58,10 @@ fn judge_code(code: &str, assertions: Vec<&str>) -> Result<Judgement> {
     let duration = start.elapsed();
     println!("Request took: {:?}", duration);
 
-    let (message, score_text) = response.content[0]
+    let (message, score_text) = response
+        .content
+        .first()
+        .expect("content contains no message")
         .text
         .rsplit_once('\n')
         .ok_or(anyhow::anyhow!("Failed to parse score"))?;
@@ -69,6 +72,10 @@ fn judge_code(code: &str, assertions: Vec<&str>) -> Result<Judgement> {
         message: message.trim().into(),
     })
 }
+
+const RED: &'static str = "\x1b[31m";
+const GREEN: &'static str = "\x1b[32m";
+const RESET: &'static str = "\x1b[0m";
 
 fn main() -> Result<()> {
     let assertions = vec![
@@ -81,19 +88,12 @@ fn main() -> Result<()> {
     let code = include_str!("../data/code-to-judge");
 
     let result = judge_code(code, assertions)?;
-    let escape_code_red = "\x1b[31m";
-    let escape_code_green = "\x1b[32m";
-    let escape_code_reset = "\x1b[0m";
     println!(
         "========= Result =======\nMessage: {}\n\nScore: {}{}{}\n",
         result.message,
-        if result.score < 2.0 {
-            escape_code_red
-        } else {
-            escape_code_green
-        },
+        if result.score < 2.0 { RED } else { GREEN },
         result.score,
-        escape_code_reset
+        RESET
     );
     Ok(())
 }
