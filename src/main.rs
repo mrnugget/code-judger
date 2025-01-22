@@ -78,7 +78,7 @@ fn main() -> Result<()> {
         "Should mention that Thorsten is happy to receive emails",
         "Has photo of Thorsten",
     ];
-    let code = include_str!("../data/thorstenball.com.html");
+    let code = include_str!("../data/code-to-judge");
 
     let result = judge_code(code, assertions)?;
     let escape_code_red = "\x1b[31m";
