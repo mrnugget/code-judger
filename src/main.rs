@@ -1,6 +1,14 @@
 use anyhow::Result;
+use clap::Parser;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg(long, default_value = "anthropic")]
+    provider: String,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ContentItem {
@@ -12,6 +20,21 @@ struct ContentItem {
 #[derive(Debug, Serialize, Deserialize)]
 struct ClaudeResponse {
     content: Vec<ContentItem>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct OpenAIResponse {
+    choices: Vec<OpenAIChoice>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct OpenAIChoice {
+    message: OpenAIMessage,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct OpenAIMessage {
+    content: String,
 }
 
 struct Judgement {
@@ -34,14 +57,41 @@ fn get_claude_response(prompt: &str) -> Result<String> {
                 "role": "user",
                 "content": prompt
             }],
-            "max_tokens": 1024
         }))?
         .into_json()?;
 
     Ok(response.content.remove(0).text)
 }
 
-fn judge_code(code: &str, assertions: Vec<&str>) -> Result<Judgement> {
+fn get_openai_response(prompt: &str) -> Result<String> {
+    let api_key = std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY is not set");
+    let model = "gpt-4o";
+
+    let response: OpenAIResponse = ureq::post("https://api.openai.com/v1/chat/completions")
+        .set("Authorization", &format!("Bearer {}", api_key))
+        .set("content-type", "application/json")
+        .send_json(json!({
+            "model": model,
+            "temperature": 0.0,
+            "messages": [{
+                "role": "user",
+                "content": prompt
+            }]
+        }))?
+        .into_json()?;
+
+    Ok(response.choices[0].message.content.clone())
+}
+
+fn get_llm_response(provider: &str, prompt: &str) -> Result<String> {
+    match provider {
+        "anthropic" => get_claude_response(prompt),
+        "openai" => get_openai_response(prompt),
+        _ => Err(anyhow::anyhow!("Unsupported provider: {}", provider)),
+    }
+}
+
+fn judge_code(provider: &str, code: &str, assertions: Vec<&str>) -> Result<Judgement> {
     let mut fenced_code = String::from("```");
     fenced_code.push_str(code);
     fenced_code.push_str("```");
@@ -56,7 +106,7 @@ fn judge_code(code: &str, assertions: Vec<&str>) -> Result<Judgement> {
         .replace("<code>", &fenced_code)
         .replace("<assertions>", &formatted_assertions);
 
-    let response = get_claude_response(&prompt)?;
+    let response = get_llm_response(provider, &prompt)?;
 
     let (message, score_text) = response
         .rsplit_once('\n')
@@ -74,6 +124,8 @@ const GREEN: &'static str = "\x1b[32m";
 const RESET: &'static str = "\x1b[0m";
 
 fn main() -> Result<()> {
+    let args = Args::parse();
+
     let assertions = vec![
         "[MUST] The year of the copyright notice has to be 2025.",
         "[MUST] The link to the Twitter profile has to be to @thorstenball",
@@ -83,7 +135,7 @@ fn main() -> Result<()> {
     ];
     let code = include_str!("../data/code-to-judge");
 
-    let result = judge_code(code, assertions)?;
+    let result = judge_code(&args.provider, code, assertions)?;
     println!(
         "========= Result =======\nMessage: {}\n\nScore: {}{}{}\n",
         result.message,
