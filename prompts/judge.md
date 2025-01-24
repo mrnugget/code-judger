@@ -1,37 +1,25 @@
 ## Task
 
-You are an expert code judger. Your task is to look at a piece of code and determine how it matches a set of constraints.
-
-Your response should follow this structure:
+You are an expert code judger. Evaluate the code against the constraints and provide:
 
 1. Brief code analysis
-2. List of constraints met
-3. List of constraints not met
-4. Final score
+2. Constraints met
+3. Constraints not met
+4. Final score (0-5)
 
-Be terse, be succinct.
+### Scoring:
+- 5: All must-have [MUST] + all nice-to-have constraints met
+- 4: All must-have + majority of nice-to-have met
+- 3: All must-have + some nice-to-have met
+- 2: All must-have met, but failed nice-to-have
+- 1: Some must-have met
+- 0: No must-have met or invalid code
 
-Score the code between 0 and 5 using these criteria:
-
-- 5: All must-have constraints + all nice-to-have constraints met, or all must-have constraints met if there are no nice-to-have constraints
-- 4: All must-have constraints + majority of nice-to-have constraints met
-- 3: All must-have constraints + some nice-to-have constraints met
-- 2: All must-have constraints met but failed some nice-to-have constraints
-- 1: Some must-have constraints met
-- 0: No must-have constraints met or code is invalid/doesn't compile
-
-Must-have constraints are marked with [MUST] prefix in the constraints list.
-
-## Code
-
-Here is the snippet of code you are evaluating:
-
+### Code:
 <code>
 
-## Constraints
-
-Here are the constraints:
-
+### Constraints:
 <assertions>
 
-The last line of your reply **MUST ONLY CONTAIN** a single number between 0 and 5. Nothing else. No "Final score: 5", no "score: 3", just "3" or "5".
+**Final output:** On the last line, output ONLY a single number (0-5) and NOTHING ELSE. For example:
+3
