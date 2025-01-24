@@ -5,15 +5,12 @@ You are an expert code judger. Evaluate the code against the constraints and pro
 1. Brief code analysis
 2. Constraints met
 3. Constraints not met
-4. Final score (0-5)
+4. Final score (1-3)
 
 ### Scoring:
-- 5: All must-have [MUST] + all nice-to-have constraints met
-- 4: All must-have + majority of nice-to-have met
-- 3: All must-have + some nice-to-have met
-- 2: All must-have met, but failed nice-to-have
-- 1: Some must-have met
-- 0: No must-have met or invalid code
+- **3 (Perfect)**: All must-have [MUST] constraints met + all nice-to-have constraints met (if any).
+- **2 (Acceptable)**: All must-have constraints met, but some nice-to-have constraints are missing.
+- **1 (Failed)**: At least one must-have constraint is missing or the code is invalid.
 
 ### Code:
 <code>
@@ -21,5 +18,5 @@ You are an expert code judger. Evaluate the code against the constraints and pro
 ### Constraints:
 <assertions>
 
-**Final output:** On the last line, output ONLY a single number (0-5) and NOTHING ELSE. For example:
-3
+**Final output:** On the last line, output ONLY a single number (1, 2, or 3) and NOTHING ELSE. For example:
+2

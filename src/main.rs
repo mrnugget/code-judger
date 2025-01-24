@@ -1,3 +1,5 @@
+use std::ops::RangeInclusive;
+
 use anyhow::{Context, Result};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
@@ -108,26 +110,18 @@ fn judge_code(provider: &str, code: &str, assertions: &[&str]) -> Result<Judgeme
 
     let response = get_llm_response(provider, &prompt)?;
 
-    let (message, score_text) = response
-        .rsplit_once('\n')
-        .ok_or(anyhow::anyhow!("Failed to parse score"))?;
-    let re = regex::Regex::new(r"\d+").unwrap();
-    let caps = re
-        .captures(score_text)
-        .with_context(|| format!("Failed to find score in: {}", score_text))?;
-    let score = caps
-        .get(0)
-        .map(|m| {
-            m.as_str()
-                .parse::<f64>()
-                .with_context(|| format!("Failed to parse score: {}", m.as_str()))
-        })
-        .transpose()?
-        .expect("Failed to parse score");
+    let re = regex::Regex::new(r"\d+(\.\d+)?").unwrap();
+    let score = re
+        .find_iter(&response)
+        .last()
+        .ok_or(anyhow::anyhow!("Failed to find score in response"))?
+        .as_str()
+        .parse::<f64>()
+        .with_context(|| format!("Failed to parse score from response"))?;
 
     Ok(Judgement {
         score,
-        message: message.trim().into(),
+        message: response,
     })
 }
 
@@ -135,36 +129,54 @@ const RED: &'static str = "\x1b[31m";
 const GREEN: &'static str = "\x1b[32m";
 const RESET: &'static str = "\x1b[0m";
 
+struct TestCase {
+    assertions: Vec<&'static str>,
+    expected_score: RangeInclusive<f64>,
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
 
     let code = include_str!("../data/code-to-judge");
 
     let test_cases = vec![
-        vec![
-            "[MUST] The year of the copyright notice has to be 2025.",
-            "[MUST] The link to the Twitter profile has to be to @thorstenball",
-            "Menu item linking to Register Spill must be marked as new",
-            "Should mention that Thorsten is happy to receive emails",
-            "Has photo of Thorsten",
-        ],
-        vec![
-            "[MUST] The year of the copyright notice has to be 2025.",
-            "[MUST] The link to the Twitter profile has to be to @thorstenball",
-            "Menu item linking to Register Spill must be marked as new",
-            "[MUST] Must mention that Thorsten is happy to phone calls",
-            "Has photo of Thorsten",
-        ],
+        TestCase {
+            assertions: vec![
+                "[MUST] The year of the copyright notice has to be 2025.",
+                "[MUST] The link to the Twitter profile has to be to @thorstenball (ignore the lack of protocol)",
+                "Menu item linking to Register Spill must be marked as new",
+                "Should mention that Thorsten is happy to receive emails",
+                "Has photo of Thorsten",
+            ],
+            expected_score: 2.0..=3.0,
+        },
+        TestCase {
+            assertions: vec![
+                "[MUST] The year of the copyright notice has to be 2025.",
+                "[MUST] The link to the Twitter profile has to be to @thorstenball",
+                "Menu item linking to Register Spill must be marked as new",
+                "[MUST] Must mention that Thorsten is happy to phone calls",
+                "Has photo of Thorsten",
+            ],
+            expected_score: 1.0..=1.0,
+        },
     ];
 
-    for assertions in test_cases.iter() {
-        let result = judge_code(&args.provider, code, &assertions)?;
+    for test_case in test_cases.iter() {
+        let result = judge_code(&args.provider, code, &test_case.assertions)?;
         println!(
             "========= Result =======\nMessage: {}\n\nScore: {}{}{}\n",
             result.message,
             if result.score < 2.0 { RED } else { GREEN },
             result.score,
             RESET
+        );
+
+        assert!(
+            test_case.expected_score.contains(&result.score),
+            "Score {:?} out of expected range {:?}",
+            result.score,
+            test_case.expected_score
         );
     }
 
