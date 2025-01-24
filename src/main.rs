@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -91,7 +91,7 @@ fn get_llm_response(provider: &str, prompt: &str) -> Result<String> {
     }
 }
 
-fn judge_code(provider: &str, code: &str, assertions: Vec<&str>) -> Result<Judgement> {
+fn judge_code(provider: &str, code: &str, assertions: &[&str]) -> Result<Judgement> {
     let mut fenced_code = String::from("```");
     fenced_code.push_str(code);
     fenced_code.push_str("```");
@@ -111,7 +111,19 @@ fn judge_code(provider: &str, code: &str, assertions: Vec<&str>) -> Result<Judge
     let (message, score_text) = response
         .rsplit_once('\n')
         .ok_or(anyhow::anyhow!("Failed to parse score"))?;
-    let score = score_text.parse::<f64>()?;
+    let re = regex::Regex::new(r"\d+").unwrap();
+    let caps = re
+        .captures(score_text)
+        .with_context(|| format!("Failed to find score in: {}", score_text))?;
+    let score = caps
+        .get(0)
+        .map(|m| {
+            m.as_str()
+                .parse::<f64>()
+                .with_context(|| format!("Failed to parse score: {}", m.as_str()))
+        })
+        .transpose()?
+        .expect("Failed to parse score");
 
     Ok(Judgement {
         score,
@@ -126,22 +138,35 @@ const RESET: &'static str = "\x1b[0m";
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    let assertions = vec![
-        "[MUST] The year of the copyright notice has to be 2025.",
-        "[MUST] The link to the Twitter profile has to be to @thorstenball",
-        "Menu item linking to Register Spill must be marked as new",
-        "Should mention that Thorsten is happy to receive emails",
-        "Has photo of Thorsten",
-    ];
     let code = include_str!("../data/code-to-judge");
 
-    let result = judge_code(&args.provider, code, assertions)?;
-    println!(
-        "========= Result =======\nMessage: {}\n\nScore: {}{}{}\n",
-        result.message,
-        if result.score < 2.0 { RED } else { GREEN },
-        result.score,
-        RESET
-    );
+    let test_cases = vec![
+        vec![
+            "[MUST] The year of the copyright notice has to be 2025.",
+            "[MUST] The link to the Twitter profile has to be to @thorstenball",
+            "Menu item linking to Register Spill must be marked as new",
+            "Should mention that Thorsten is happy to receive emails",
+            "Has photo of Thorsten",
+        ],
+        vec![
+            "[MUST] The year of the copyright notice has to be 2025.",
+            "[MUST] The link to the Twitter profile has to be to @thorstenball",
+            "Menu item linking to Register Spill must be marked as new",
+            "[MUST] Must mention that Thorsten is happy to phone calls",
+            "Has photo of Thorsten",
+        ],
+    ];
+
+    for assertions in test_cases.iter() {
+        let result = judge_code(&args.provider, code, &assertions)?;
+        println!(
+            "========= Result =======\nMessage: {}\n\nScore: {}{}{}\n",
+            result.message,
+            if result.score < 2.0 { RED } else { GREEN },
+            result.score,
+            RESET
+        );
+    }
+
     Ok(())
 }

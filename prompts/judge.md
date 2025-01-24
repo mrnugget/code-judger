@@ -22,8 +22,6 @@ Score the code between 0 and 5 using these criteria:
 
 Must-have constraints are marked with [MUST] prefix in the constraints list.
 
-The last line of your reply **MUST** be a single number between 0 and 5.
-
 ## Code
 
 Here is the snippet of code you are evaluating:
@@ -35,3 +33,5 @@ Here is the snippet of code you are evaluating:
 Here are the constraints:
 
 <assertions>
+
+The last line of your reply **MUST ONLY CONTAIN** a single number between 0 and 5. Nothing else. No "Final score: 5", no "score: 3", just "3" or "5".
