@@ -18,5 +18,15 @@ You are an expert code judger. Evaluate the code against the constraints and pro
 ### Constraints:
 <assertions>
 
-**Final output:** On the last line, output ONLY a single number (1, 2, or 3) and NOTHING ELSE. For example:
+### Final Output Requirements:
+- Put the score on its own line at the very end
+- The score must be the only content on that line
+- Only use whole numbers between 1 and 3
+
+Example of valid output:
+The code meets all must-have constraints but misses some nice-to-haves.
 2
+
+Example of INVALID output:
+Score: 2/3
+Final rating: 2.5

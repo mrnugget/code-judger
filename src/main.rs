@@ -40,36 +40,48 @@ struct OpenAIMessage {
 }
 
 struct Judgement {
-    score: f64,
+    score: i32,
     message: String,
 }
 
 fn get_claude_response(prompt: &str) -> Result<String> {
     let api_key = std::env::var("ANTHROPIC_API_KEY").expect("ANTHROPIC_API_KEY is not set");
-    let model = "claude-3-5-haiku-latest";
+    let model = "claude-3-5-sonnet-latest";
 
-    let mut response: ClaudeResponse = ureq::post("https://api.anthropic.com/v1/messages")
+    let response = ureq::post("https://api.anthropic.com/v1/messages")
         .set("x-api-key", &api_key)
         .set("anthropic-version", "2023-06-01")
         .set("content-type", "application/json")
         .send_json(json!({
             "model": model,
             "temperature": 0.0,
+            "max_tokens": 1024,
             "messages": [{
                 "role": "user",
                 "content": prompt
             }],
-        }))?
-        .into_json()?;
+        }));
 
-    Ok(response.content.remove(0).text)
+    let response = match response {
+        Ok(res) => res,
+        Err(ureq::Error::Status(status, res)) => {
+            let error_body = res
+                .into_string()
+                .context("Failed to read error response body")?;
+            return Err(anyhow::anyhow!("API error {}: {}", status, error_body));
+        }
+        Err(e) => return Err(e.into()),
+    };
+
+    let mut response_body: ClaudeResponse = response.into_json()?;
+    Ok(response_body.content.remove(0).text)
 }
 
 fn get_openai_response(prompt: &str) -> Result<String> {
     let api_key = std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY is not set");
     let model = "gpt-4o";
 
-    let response: OpenAIResponse = ureq::post("https://api.openai.com/v1/chat/completions")
+    let response = ureq::post("https://api.openai.com/v1/chat/completions")
         .set("Authorization", &format!("Bearer {}", api_key))
         .set("content-type", "application/json")
         .send_json(json!({
@@ -79,10 +91,21 @@ fn get_openai_response(prompt: &str) -> Result<String> {
                 "role": "user",
                 "content": prompt
             }]
-        }))?
-        .into_json()?;
+        }));
 
-    Ok(response.choices[0].message.content.clone())
+    let response = match response {
+        Ok(res) => res,
+        Err(ureq::Error::Status(status, res)) => {
+            let error_body = res
+                .into_string()
+                .context("Failed to read error response body")?;
+            return Err(anyhow::anyhow!("API error {}: {}", status, error_body));
+        }
+        Err(e) => return Err(e.into()),
+    };
+
+    let response_body: OpenAIResponse = response.into_json()?;
+    Ok(response_body.choices[0].message.content.clone())
 }
 
 fn get_llm_response(provider: &str, prompt: &str) -> Result<String> {
@@ -110,19 +133,31 @@ fn judge_code(provider: &str, code: &str, assertions: &[&str]) -> Result<Judgeme
 
     let response = get_llm_response(provider, &prompt)?;
 
-    let re = regex::Regex::new(r"\d+(\.\d+)?").unwrap();
-    let score = re
-        .find_iter(&response)
-        .last()
-        .ok_or(anyhow::anyhow!("Failed to find score in response"))?
-        .as_str()
-        .parse::<f64>()
-        .with_context(|| format!("Failed to parse score from response"))?;
+    let score =
+        parse_score(&response).with_context(|| format!("Failed to parse score from response"))?;
 
     Ok(Judgement {
         score,
         message: response,
     })
+}
+
+const VALID_SCORE_RANGE: RangeInclusive<i32> = 1..=3;
+
+fn parse_score(response: &str) -> Result<i32> {
+    response
+        .lines()
+        .last()
+        .map(|s| s.trim())
+        .and_then(|s| s.parse().ok())
+        .ok_or_else(|| anyhow::anyhow!("Failed to parse score from response:\n{}", response))
+        .and_then(|score: i32| {
+            if VALID_SCORE_RANGE.contains(&score) {
+                Ok(score)
+            } else {
+                Err(anyhow::anyhow!("Score {} out of valid range 1-3", score))
+            }
+        })
 }
 
 const RED: &'static str = "\x1b[31m";
@@ -131,7 +166,7 @@ const RESET: &'static str = "\x1b[0m";
 
 struct TestCase {
     assertions: Vec<&'static str>,
-    expected_score: RangeInclusive<f64>,
+    expected_score: RangeInclusive<i32>,
 }
 
 fn main() -> Result<()> {
@@ -148,7 +183,7 @@ fn main() -> Result<()> {
                 "Should mention that Thorsten is happy to receive emails",
                 "Has photo of Thorsten",
             ],
-            expected_score: 2.0..=3.0,
+            expected_score: 2..=3,
         },
         TestCase {
             assertions: vec![
@@ -158,7 +193,7 @@ fn main() -> Result<()> {
                 "[MUST] Must mention that Thorsten is happy to phone calls",
                 "Has photo of Thorsten",
             ],
-            expected_score: 1.0..=1.0,
+            expected_score: 1..=1,
         },
     ];
 
@@ -167,7 +202,7 @@ fn main() -> Result<()> {
         println!(
             "========= Result =======\nMessage: {}\n\nScore: {}{}{}\n",
             result.message,
-            if result.score < 2.0 { RED } else { GREEN },
+            if result.score < 2 { RED } else { GREEN },
             result.score,
             RESET
         );
